@@ -17,26 +17,17 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+
+#pragma once
+
 #include <Arduino.h>
 
-#include "eeprog.h"
-
-eeprog programmer;
-
-uint8_t mock_data[64];
-
-void setup()
+class eeprog
 {
-    // Mock some data
-    for(int i = 0; i < 64; ++i)
-    {
-      mock_data[i] = i;
-    }
-
-    programmer.reset();
-    programmer.write(0x00, mock_data, 64);
-}
-
-void loop() 
-{
-}
+public:
+  void reset();
+  void write(uint16_t base_address, uint8_t *data, uint8_t size);
+private:
+  void _write_enable();
+  void _write(uint8_t data);
+};
