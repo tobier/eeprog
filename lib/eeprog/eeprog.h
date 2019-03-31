@@ -28,6 +28,8 @@ public:
   void reset();
   void write(uint16_t base_address, uint8_t *data, uint8_t size);
 private:
+  void _set_address(uint16_t address);
+
   void _write_enable();
   void _write(uint8_t data);
 };

@@ -21,20 +21,22 @@
 
 #include "eeprog.h"
 
+#define MOCK_DATA_SIZE 64
+
 eeprog programmer;
 
-uint8_t mock_data[64];
+uint8_t mock_data[MOCK_DATA_SIZE];
 
 void setup()
 {
     // Mock some data
-    for(int i = 0; i < 64; ++i)
+    for(int i = 0; i < MOCK_DATA_SIZE; ++i)
     {
       mock_data[i] = i;
     }
 
     programmer.reset();
-    programmer.write(0x00, mock_data, 64);
+    programmer.write(0, mock_data, MOCK_DATA_SIZE);
 }
 
 void loop() 
