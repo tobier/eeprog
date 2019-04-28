@@ -19,26 +19,24 @@
 // SOFTWARE.
 #include <Arduino.h>
 
-#include "eeprog.h"
+#include "state.h"
 
-#define MOCK_DATA_SIZE 64
-
-eeprog programmer;
-
-uint8_t mock_data[MOCK_DATA_SIZE];
+state_fn_t state_machine[]
+{
+    &state_reset,
+    &state_connect,
+    &state_await_command,
+    &state_read
+};
+state_fn_t current_state;
 
 void setup()
 {
-    // Mock some data
-    for(int i = 0; i < MOCK_DATA_SIZE; ++i)
-    {
-      mock_data[i] = i;
-    }
-
-    programmer.reset();
-    programmer.write(0, mock_data, MOCK_DATA_SIZE);
+  current_state = state_machine[state_t::reset];
 }
 
 void loop() 
 {
+  state_t next_state = current_state();
+  current_state = state_machine[next_state];
 }
