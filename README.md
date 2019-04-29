@@ -1,4 +1,7 @@
 # eeprog
+
+[![build](https://travis-ci.org/tobier/eeprog.svg)](https://travis-ci.org/tobier/eeprog)
+
 Firmware for eeprog - EEPROM programmer on the ATmega328 microcontroller
 
 ## Hardware
