@@ -18,29 +18,36 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-import argparse
-import os
-import sys
+import serial
+import serial.tools.list_ports
 
-from device import find_device
-from programmer import Programmer
+from serial import SerialException
 
-def main():
-    parser = argparse.ArgumentParser(description='eeprog is a 28c64 programmer')
-    parser.add_argument('-p', '--port', type=str, help='the serial port to use')
-    subparsers = parser.add_subparsers(help='sub-command help')
+EEPROG_IDENTIFIER = 'eeprog'
 
-    parser_read = subparsers.add_parser('read', help='read command help')
-    parser_read.add_argument('outfile', help='the file to read the data to')
+class ConnectionFailed(Exception):
+    pass
 
-    args = parser.parse_args()
-    
-    serial_port = args.port if args.port else find_device()
-    print("Using device: " + serial_port)
-    programmer = Programmer(serial_port)
+class DeviceNotFound(Exception):
+    pass
 
-    if args.outfile:
-      programmer.read_to(args.outfile)
+def connect_to(device):
+    try:
+        ser = serial.Serial(port = device, baudrate=9600)
+        identifier = ser.read_until().decode('ascii').strip()
+        if identifier == EEPROG_IDENTIFIER:
+            return ser
+        raise ConnectionFailed("Failed to connect to device: " + device)
+    except SerialException:
+        raise ConnectionFailed("No such device: " + device)
 
-if __name__== "__main__":
-    main()
+def find_device():
+    for comport in serial.tools.list_ports.comports():
+        try:
+            with serial.Serial(port = comport.device, baudrate=9600, timeout=2.0) as ser:
+                identifier = ser.read_until().decode('ascii').strip()
+                if identifier == EEPROG_IDENTIFIER:
+                    return comport.device
+        except:
+                pass
+    raise DeviceNotFound("Failed to find device")

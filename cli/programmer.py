@@ -18,29 +18,26 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-import argparse
-import os
-import sys
+from tqdm import tqdm
 
-from device import find_device
-from programmer import Programmer
+from device import connect_to
 
-def main():
-    parser = argparse.ArgumentParser(description='eeprog is a 28c64 programmer')
-    parser.add_argument('-p', '--port', type=str, help='the serial port to use')
-    subparsers = parser.add_subparsers(help='sub-command help')
+COMMAND_ACK  = chr(0x06)
+COMMAND_READ = b'r'
 
-    parser_read = subparsers.add_parser('read', help='read command help')
-    parser_read.add_argument('outfile', help='the file to read the data to')
+class RemoteCommandFailed(Exception):
+    pass
 
-    args = parser.parse_args()
+class Programmer:
+    def __init__(self, port):
+        self.serial = connect_to(port)
     
-    serial_port = args.port if args.port else find_device()
-    print("Using device: " + serial_port)
-    programmer = Programmer(serial_port)
-
-    if args.outfile:
-      programmer.read_to(args.outfile)
-
-if __name__== "__main__":
-    main()
+    def read_to(self, outfile):
+        self.serial.write(COMMAND_READ)
+        ack = self.serial.read()
+        if ack.decode('ascii') != COMMAND_ACK:
+            raise RemoteCommandFailed("No ACK for read command")
+        with open(outfile, "wb") as to_file:
+            for i in tqdm(iterable = range(128), desc='Reading from EEPROM', unit='block'):
+                block_buffer = bytearray(self.serial.read(64))
+                to_file.write(block_buffer)
