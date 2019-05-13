@@ -33,14 +33,19 @@ def main():
     parser_read = subparsers.add_parser('read', help='read command help')
     parser_read.add_argument('outfile', help='the file to read the data to')
 
+    parser_write = subparsers.add_parser('write', help='write command help')
+    parser_write.add_argument('infile', help='the file to write the data from')
+
     args = parser.parse_args()
     
     serial_port = args.port if args.port else find_device()
     print("Using device: " + serial_port)
     programmer = Programmer(serial_port)
 
-    if args.outfile:
-      programmer.read_to(args.outfile)
+    if hasattr(args, 'outfile'):
+        programmer.read(args.outfile)
+    elif hasattr(args, 'infile'):
+        programmer.write(args.infile)
 
 if __name__== "__main__":
     main()

@@ -24,9 +24,12 @@
 
 #include "eeprog.h"
 
-#define ASCII_ACK  0x06
-#define ASCII_NACK 0x15
-#define ASCII_READ 0x72
+#define CONNECT_IDENTIFIER "eeprog"
+
+#define COMMAND_ACK   0x06
+#define COMMAND_NACK  0x15
+#define COMMAND_READ  0x72
+#define COMMAND_WRITE 0x77
 
 eeprog programmer;
 
@@ -42,7 +45,7 @@ state_t state_reset(void)
 
 state_t state_connect(void)
 {
-    Serial.write(ASCII_ACK);
+    Serial.println(CONNECT_IDENTIFIER);
     return state_t::await_command;
 }
 
@@ -53,11 +56,14 @@ state_t state_await_command(void)
         char command = Serial.read();
         switch(command)
         {
-            case ASCII_READ:
-                Serial.write(ASCII_ACK);
+            case COMMAND_READ:
+                Serial.write(COMMAND_ACK);
                 return state_t::read;
+            case COMMAND_WRITE:
+                Serial.write(COMMAND_ACK);
+                return state_t::write;
             default:
-                Serial.write(ASCII_NACK);
+                Serial.write(COMMAND_NACK);
                 break;
         }
     }
@@ -66,16 +72,47 @@ state_t state_await_command(void)
 
 state_t state_read(void)
 {
-    uint8_t byte_buffer[BLOCK_SIZE];
+    uint8_t buffer[BLOCK_SIZE];
+    uint16_t address = 0;
 
-    for(uint8_t block = 0; block < NUMBER_OF_BLOCKS; ++block)
+    for(size_t i = 0; i < NUMBER_OF_BLOCKS; ++i)
     {
-        uint16_t base_address = block * BLOCK_SIZE;
-        programmer.read(base_address, byte_buffer, BLOCK_SIZE);
-        for(uint8_t data = 0; data < BLOCK_SIZE; ++data)
+        programmer.read(address, buffer, BLOCK_SIZE);
+
+        Serial.write(buffer, BLOCK_SIZE);
+        address += BLOCK_SIZE;
+
+        Serial.write(COMMAND_ACK);
+    }
+
+    return state_t::await_command;
+}
+
+state_t state_write(void)
+{
+    uint8_t write_buffer[BLOCK_SIZE];
+    uint8_t read_buffer[BLOCK_SIZE];
+    uint16_t address = 0;
+
+    for(size_t i = 0; i < NUMBER_OF_BLOCKS; ++i)
+    {
+        Serial.readBytes(write_buffer, BLOCK_SIZE);
+        programmer.write(address, write_buffer, BLOCK_SIZE);
+
+        bool verified = true;
+        programmer.read(address, read_buffer, BLOCK_SIZE);
+
+        for(size_t j = 0; j < BLOCK_SIZE; ++j)
         {
-            Serial.write(byte_buffer[data]);
+            if(write_buffer[j] != read_buffer[j])
+            {
+                verified = false;
+                break;
+            }
         }
+
+        address += BLOCK_SIZE;
+        Serial.write(verified ? COMMAND_ACK : COMMAND_NACK);
     }
 
     return state_t::await_command;

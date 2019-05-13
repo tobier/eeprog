@@ -26,7 +26,8 @@ state_fn_t state_machine[]
     &state_reset,
     &state_connect,
     &state_await_command,
-    &state_read
+    &state_read,
+    &state_write
 };
 state_fn_t current_state;
 

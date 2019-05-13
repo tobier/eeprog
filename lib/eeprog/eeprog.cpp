@@ -20,176 +20,112 @@
 
 #include "eeprog.h"
 
-#include <Wire.h>
+#define PIN_SHIFT_ADDRESS 2
+#define PIN_CLOCK_ADDRESS 3
+#define PIN_LATCH_ADDRESS 4
+#define PIN_WRITE_ENABLE  13
 
-#define MCP23008_DEVICE_I2C_ADDRESS 0x20
-#define MCP23008_SLAVE_I2C_ADDRESS  0x04
+#define PIN_DATA_0 5
+#define PIN_DATA_7 12
 
-#define MCP23008_REGISTER_IODIR     0x00
-#define MCP23008_REGISTER_GPIO      0x09
+#define MODE_DELAY_MS 3
 
-#define MCP23017_DEVICE_I2C_ADDRESS 0x20
-#define MCP23017_SLAVE_I2C_ADDRESS  0x00
-
-#define MCP23017_REGISTER_IODIRA    0x00
-#define MCP23017_REGISTER_IODIRB    0x01
-
-#define MCP23017_REGISTER_GPIOA     0x12
-#define MCP23017_REGISTER_GPIOB     0x13
-
-#define IO_ALL_PINS_OUTPUT          0x00
-#define IO_ALL_PINS_INPUT           0xFF
-
-#define EEPROG_PIN_RESET 9
-#define EEPROG_PIN_CE   10
-#define EEPROG_PIN_OE   11
-#define EEPROG_PIN_WE   12
-
-#define ADDRESS_OUTPUT_DELAY_US 1
-
-#define DELAY_I2C_US   10
+#define DATA_OUTPUT_DELAY_MS    3
+#define ADDRESS_OUTPUT_DELAY_MS 3
+#define DATA_LATCH_DELAY_US     1
 
 void eeprog::reset()
 {
-    // Set the digital pin modes
-    pinMode(EEPROG_PIN_RESET, OUTPUT);
-    pinMode(EEPROG_PIN_CE, OUTPUT);
-    pinMode(EEPROG_PIN_OE, OUTPUT);
-    pinMode(EEPROG_PIN_WE, OUTPUT);
+    pinMode(PIN_SHIFT_ADDRESS, OUTPUT);
+    pinMode(PIN_CLOCK_ADDRESS, OUTPUT);
+    pinMode(PIN_LATCH_ADDRESS, OUTPUT);
+    pinMode(PIN_WRITE_ENABLE, OUTPUT);
 
-    // All pins are active-low, so set to high to begin with
-    digitalWrite(EEPROG_PIN_RESET, HIGH);
-    digitalWrite(EEPROG_PIN_CE, HIGH);
-    digitalWrite(EEPROG_PIN_OE, HIGH);
-    digitalWrite(EEPROG_PIN_WE, HIGH);
+    digitalWrite(PIN_WRITE_ENABLE, HIGH);
 
-    // Perform a RESET
-    digitalWrite(EEPROG_PIN_RESET, LOW);
-    delay(1);
-    digitalWrite(EEPROG_PIN_RESET, HIGH);
-
-    // Enable i2c interface
-    Wire.begin();
-
-    // MCP23017 will only be used as output so set it like so
-    Wire.beginTransmission(MCP23017_DEVICE_I2C_ADDRESS | MCP23017_SLAVE_I2C_ADDRESS);
-    {
-        Wire.write(MCP23017_REGISTER_IODIRA);
-        Wire.write(IO_ALL_PINS_OUTPUT);
-        Wire.write(MCP23017_REGISTER_IODIRB);
-        Wire.write(IO_ALL_PINS_OUTPUT);
-    }
-    Wire.endTransmission();
+    this->_mode_read();
 }
 
-void eeprog::write(uint16_t base_address, uint8_t *data, uint8_t size)
+void eeprog::write(uint16_t base_address, uint8_t *data, size_t size)
 {
-    this->_write_enable();
+    this->_mode_write();
 
-    for(uint8_t i = 0; i < size; ++i)
+    for(uint16_t i = 0; i < size; ++i)
     {
-        this->_set_address(base_address + i);
-        this->_write(data[i]);
+        _set_address(base_address + i, false);
+        delay(ADDRESS_OUTPUT_DELAY_MS);
+
+        _set_data(data[i]);
+        delay(DATA_OUTPUT_DELAY_MS);
+
+        digitalWrite(PIN_WRITE_ENABLE, LOW);
+        delayMicroseconds(DATA_LATCH_DELAY_US);
+        digitalWrite(PIN_WRITE_ENABLE, HIGH);
     }
 }
 
-void eeprog::read(uint16_t start_address, uint8_t *buffer, uint8_t size)
+void eeprog::read(uint16_t base_address, uint8_t *buffer, size_t size)
 {
-    this->_read_enable();
+    this->_mode_read();
 
-    digitalWrite(EEPROG_PIN_WE, HIGH);
-
-    for(uint8_t i = 0; i < size; ++i)
+    for(uint16_t i = 0; i < size; ++i)
     {
-        this->_set_address(start_address + i);
+        _set_address(base_address + i, true);
+        delay(ADDRESS_OUTPUT_DELAY_MS);
 
-        digitalWrite(EEPROG_PIN_CE, LOW);
-        digitalWrite(EEPROG_PIN_OE, LOW);
-        delayMicroseconds(ADDRESS_OUTPUT_DELAY_US);
-
-        uint8_t data = this->_read();
-
-        digitalWrite(EEPROG_PIN_CE, HIGH);
-        digitalWrite(EEPROG_PIN_OE, HIGH);
+        uint8_t data = _read_data();
         buffer[i] = data;
     }
-
 }
 
-inline void eeprog::_set_address(uint16_t address)
+inline void eeprog::_set_address(uint16_t address, bool read)
 {
-    uint8_t lo_byte = address & 0xFF;
-    uint8_t hi_byte = (address >> 8) & 0xFF;
+    // Shift out the address to the address registers
+    shiftOut(PIN_SHIFT_ADDRESS, PIN_CLOCK_ADDRESS, MSBFIRST, (address >> 8) | (read ? 0x00 : 0x80));
+    shiftOut(PIN_SHIFT_ADDRESS, PIN_CLOCK_ADDRESS, MSBFIRST, address);
 
-    Wire.beginTransmission(MCP23017_DEVICE_I2C_ADDRESS | MCP23017_SLAVE_I2C_ADDRESS);
-    {
-        Wire.write(MCP23017_REGISTER_GPIOA);
-        Wire.write(lo_byte);
-        Wire.write(MCP23017_REGISTER_GPIOB);
-        Wire.write(hi_byte);
-    }
-    Wire.endTransmission();
-
-    delayMicroseconds(DELAY_I2C_US);
+    // Latch the address
+    digitalWrite(PIN_LATCH_ADDRESS, LOW);
+    digitalWrite(PIN_LATCH_ADDRESS, HIGH);
+    digitalWrite(PIN_LATCH_ADDRESS, LOW);
 }
 
-inline void eeprog::_write_enable()
+inline void eeprog::_set_data(uint8_t data)
 {
-    pinMode(EEPROG_PIN_CE, OUTPUT);
-    pinMode(EEPROG_PIN_OE, OUTPUT);
-    pinMode(EEPROG_PIN_WE, OUTPUT);
-
-    digitalWrite(EEPROG_PIN_OE, HIGH);
-
-    Wire.beginTransmission(MCP23008_DEVICE_I2C_ADDRESS | MCP23008_SLAVE_I2C_ADDRESS);
-    {
-        Wire.write(MCP23008_REGISTER_IODIR); // Set I/O direction
-        Wire.write(IO_ALL_PINS_OUTPUT);      // Set all pins as output
+    for (uint8_t dataPin = PIN_DATA_0; dataPin <= PIN_DATA_7; dataPin += 1) {
+        digitalWrite(dataPin, data & 1);
+        data = data >> 1;
     }
-    Wire.endTransmission();
-
-    delayMicroseconds(DELAY_I2C_US);
 }
 
-inline void eeprog::_write(uint8_t data)
+inline uint8_t eeprog::_read_data()
 {
-    Wire.beginTransmission(MCP23008_DEVICE_I2C_ADDRESS | MCP23008_SLAVE_I2C_ADDRESS);
-    {
-        Wire.write(MCP23008_REGISTER_GPIO); // Select the GPIO register
-        Wire.write(data);                   // Write the data to GPIO
+    uint8_t data = 0;
+    for (int pin = PIN_DATA_7; pin >= PIN_DATA_0; pin -= 1) {
+        data = (data << 1) + digitalRead(pin);
     }
-    Wire.endTransmission();
 
-    delayMicroseconds(DELAY_I2C_US);
+    return data;
 }
 
-inline void eeprog::_read_enable()
+inline void eeprog::_mode_read()
 {
-    pinMode(EEPROG_PIN_CE, OUTPUT);
-    pinMode(EEPROG_PIN_OE, OUTPUT);
-    pinMode(EEPROG_PIN_WE, OUTPUT);
-
-    Wire.beginTransmission(MCP23008_DEVICE_I2C_ADDRESS | MCP23008_SLAVE_I2C_ADDRESS);
+    for(uint8_t dataPin = PIN_DATA_0; dataPin <= PIN_DATA_7; dataPin += 1)
     {
-        Wire.write(MCP23008_REGISTER_IODIR); // Set I/O direction
-        Wire.write(IO_ALL_PINS_INPUT);       // Set all pins as input
+        pinMode(dataPin, INPUT);
     }
-    Wire.endTransmission();
 
-    delayMicroseconds(DELAY_I2C_US);
+    digitalWrite(PIN_WRITE_ENABLE, HIGH);
+    delay(MODE_DELAY_MS);
 }
 
-inline uint8_t eeprog::_read()
+inline void eeprog::_mode_write()
 {
-    Wire.beginTransmission(MCP23008_DEVICE_I2C_ADDRESS | MCP23008_SLAVE_I2C_ADDRESS);
+    for(uint8_t dataPin = PIN_DATA_0; dataPin <= PIN_DATA_7; dataPin += 1)
     {
-        Wire.write(MCP23008_REGISTER_GPIO); // Select the GPIO register
+        pinMode(dataPin, OUTPUT);
     }
-    Wire.endTransmission();
 
-    delayMicroseconds(DELAY_I2C_US);
-
-    Wire.requestFrom(MCP23008_DEVICE_I2C_ADDRESS | MCP23008_SLAVE_I2C_ADDRESS, (uint8_t)1);
-
-    return Wire.read();
+    digitalWrite(PIN_WRITE_ENABLE, HIGH);
+    delay(MODE_DELAY_MS);
 }

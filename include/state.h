@@ -25,7 +25,8 @@ typedef enum
     reset,
     connect,
     await_command,
-    read
+    read,
+    write
 } state_t;
 
 typedef state_t (*state_fn_t)(void);
@@ -34,3 +35,4 @@ state_t state_reset(void);
 state_t state_connect(void);
 state_t state_await_command(void);
 state_t state_read(void);
+state_t state_write(void);

@@ -22,8 +22,12 @@ from tqdm import tqdm
 
 from device import connect_to
 
-COMMAND_ACK  = chr(0x06)
-COMMAND_READ = b'r'
+BLOCK_SIZE = 64
+NUMBER_OF_BLOCKS = 128
+
+COMMAND_ACK   = chr(0x06)
+COMMAND_READ  = b'r'
+COMMAND_WRITE = b'w'
 
 class RemoteCommandFailed(Exception):
     pass
@@ -32,12 +36,30 @@ class Programmer:
     def __init__(self, port):
         self.serial = connect_to(port)
     
-    def read_to(self, outfile):
+    def read(self, outfile):
         self.serial.write(COMMAND_READ)
         ack = self.serial.read()
         if ack.decode('ascii') != COMMAND_ACK:
             raise RemoteCommandFailed("No ACK for read command")
         with open(outfile, "wb") as to_file:
-            for i in tqdm(iterable = range(128), desc='Reading from EEPROM', unit='block'):
-                block_buffer = bytearray(self.serial.read(64))
+            for i in tqdm(iterable = range(NUMBER_OF_BLOCKS), desc='Reading from EEPROM', unit='blocks'):
+                block_buffer = bytearray(self.serial.read(BLOCK_SIZE))
                 to_file.write(block_buffer)
+
+                ack = self.serial.read()
+                if ack.decode('ascii') != COMMAND_ACK:
+                    raise RemoteCommandFailed("No ACK after block read")
+
+    def write(self, infile):
+        self.serial.write(COMMAND_WRITE)
+        ack = self.serial.read()
+        if ack.decode('ascii') != COMMAND_ACK:
+            raise RemoteCommandFailed("No ACK for write command")
+        with open(infile, "rb") as from_file:
+            for i in tqdm(iterable = range(NUMBER_OF_BLOCKS), desc='Writing to EEPROM', unit='blocks'):
+                block_buffer = bytearray(from_file.read(BLOCK_SIZE))
+                self.serial.write(block_buffer)
+
+                ack = self.serial.read()
+                if ack.decode('ascii') != COMMAND_ACK:
+                    raise RemoteCommandFailed("No ACK after block write")

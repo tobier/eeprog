@@ -26,15 +26,13 @@ class eeprog
 {
 public:
   void reset();
-  void write(uint16_t base_address, uint8_t *data, uint8_t size);
-  void read(uint16_t start_address, uint8_t *buffer, uint8_t size);
+  void write(uint16_t base_address, uint8_t *data, size_t size);
+  void read(uint16_t base_address, uint8_t *buffer, size_t size);
 
 private:
-  void _set_address(uint16_t address);
-
-  void _write_enable();
-  void _write(uint8_t data);
-
-  void _read_enable();
-  uint8_t _read();
+  void _set_address(uint16_t address, bool read);
+  void _set_data(uint8_t data);
+  uint8_t _read_data();
+  void _mode_read();
+  void _mode_write();
 };
