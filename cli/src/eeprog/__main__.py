@@ -19,11 +19,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 import argparse
-import os
 import sys
 
-from device import find_device
-from programmer import Programmer
+from eeprog.device import find_device
+from eeprog.programmer import Programmer
 
 def main():
     parser = argparse.ArgumentParser(description='eeprog is a 28c64 programmer')
@@ -47,5 +46,6 @@ def main():
     elif hasattr(args, 'infile'):
         programmer.write(args.infile)
 
-if __name__== "__main__":
+if __name__ == "__main__":
     main()
+

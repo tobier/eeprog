@@ -20,7 +20,7 @@
 # SOFTWARE.
 from tqdm import tqdm
 
-from device import connect_to
+from eeprog.device import connect_to
 
 BLOCK_SIZE = 64
 NUMBER_OF_BLOCKS = 128
@@ -63,3 +63,4 @@ class Programmer:
                 ack = self.serial.read()
                 if ack.decode('ascii') != COMMAND_ACK:
                     raise RemoteCommandFailed("No ACK after block write")
+

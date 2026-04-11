@@ -51,3 +51,4 @@ def find_device():
         except:
                 pass
     raise DeviceNotFound("Failed to find device")
+
